@@ -20,13 +20,13 @@ app.get("/health",(req,res)=>{
     })
 })
 io.on("connection",(socket)=>{
-    console.log("new. client connected",socket.id)
+    console.log("new client connected",socket.id)
     socket.on("sender",(senderData)=>{
-        const {targertID,message} = senderData
-        console.log(targertID,message)
+        const {targetID,message} = senderData
+        console.log(targetID,message)
 
         
-        io.to(targertID).emit("receiver",{
+        io.to(targetID).emit("receiver",{
             sender:socket.id,
             message:message
         })

@@ -6,12 +6,12 @@ const socket = io("http://localhost:9000");
 
 function App() {
   const [socketID, setSocketID] = useState("");
-  const [targetId,serTargetId]=useState("")
-  const [message,setMessage]=useState()
+  const [targetId,setTargetId]=useState("")
+  const [message,setMessage]=useState("")
   const sendMessage=()=>{
     console.log("ruko bhej raha ....")
     socket.emit("sender",{
-      targertID:targetId,
+      targetID:targetId,
       message:message
     })
 
@@ -40,7 +40,7 @@ function App() {
           className="targetclass"
           type="text"
           placeholder="enter target id"
-          onChange={(e)=>serTargetId(e.target.value)}
+          onChange={(e)=>setTargetId(e.target.value)}
         />
         <input
         value={message}
