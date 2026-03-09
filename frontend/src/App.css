@@ -1,7 +1,115 @@
 *{
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  background-color: #272626;
-  color: wheat;
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:sans-serif;
+}
+
+/* main layout */
+
+.outer{
+  width:100vw;
+  height:100vh;
+  display:flex;
+}
+
+/* chat panel */
+
+.chat{
+  width:30%;
+  height:100vh;
+  background:#5c5555;
+  display:flex;
+  flex-direction:column;
+}
+
+/* chat header */
+
+.chatHeader{
+  background:#333;
+  padding:10px;
+  display:flex;
+  justify-content:space-between;
+  border-bottom:1px solid #777;
+  color:white;
+}
+
+.chatHeader span{
+  color:#00ff9d;
+  font-weight:bold;
+}
+
+/* messages */
+
+.chatsection{
+  flex:1;
+  padding:10px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+}
+
+/* sender bubble */
+
+.myMessage{
+  background:#4CAF50;
+  padding:8px 12px;
+  margin:5px;
+  border-radius:8px;
+  align-self:flex-end;
+  max-width:70%;
+  color:white;
+}
+
+/* receiver bubble */
+
+.otherMessage{
+  background:#222;
+  padding:8px 12px;
+  margin:5px;
+  border-radius:8px;
+  align-self:flex-start;
+  max-width:70%;
+  color:white;
+}
+
+/* input area */
+
+.input{
+  display:flex;
+  gap:10px;
+  padding:10px;
+  border-top:1px solid #777;
+}
+
+.input input{
+  flex:1;
+  padding:8px;
+}
+
+.input button{
+  padding:8px 12px;
+  background:#4CAF50;
+  border:none;
+  color:white;
+  cursor:pointer;
+}
+
+/* video area */
+
+.video{
+  width:70%;
+  height:100vh;
+  background:#272626;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:20px;
+}
+
+/* video elements */
+
+.videoBox{
+  width:300px;
+  border:2px solid white;
 }
