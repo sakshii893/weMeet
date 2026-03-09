@@ -4,8 +4,13 @@ const { Server } = require('socket.io');
 
 const app=express()
 const httpServer=http.createServer(app)
-const PORT=process.env.PORT || 8000
-const io = new Server(httpServer);
+const PORT=process.env.PORT || 9000
+const io = new Server(httpServer,{
+    cors:{
+        origin:"http://localhost:5173",
+        methods:["GET","POST"]
+    }
+});
 
 app.get("/health",(req,res)=>{
     res.send({
@@ -16,6 +21,16 @@ app.get("/health",(req,res)=>{
 })
 io.on("connection",(socket)=>{
     console.log("new. client connected",socket.id)
+    socket.on("sender",(senderData)=>{
+        const {targertID,message} = senderData
+        console.log(targertID,message)
+
+        
+        io.to(targertID).emit("receiver",{
+            sender:socket.id,
+            message:message
+        })
+    })
 })
 
 httpServer.listen(PORT,()=>{
