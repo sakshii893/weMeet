@@ -21,15 +21,47 @@ app.get("/health",(req,res)=>{
 })
 io.on("connection",(socket)=>{
     console.log("new client connected",socket.id)
+    
+    // Handle text chat messages
     socket.on("sender",(senderData)=>{
         const {targetID,message} = senderData
         console.log(targetID,message)
-
         
         io.to(targetID).emit("receiver",{
             sender:socket.id,
             message:message
         })
+    })
+
+    // WebRTC Signaling: Forward offer to target peer
+    socket.on("offer", (data) => {
+        console.log("Forwarding offer from", socket.id, "to", data.targetID)
+        io.to(data.targetID).emit("offer", {
+            offer: data.offer,
+            sender: socket.id
+        })
+    })
+
+    // WebRTC Signaling: Forward answer to target peer
+    socket.on("answer", (data) => {
+        console.log("Forwarding answer from", socket.id, "to", data.targetID)
+        io.to(data.targetID).emit("answer", {
+            answer: data.answer,
+            sender: socket.id
+        })
+    })
+
+    // WebRTC Signaling: Forward ICE candidates to target peer
+    socket.on("ice-candidate", (data) => {
+        console.log("Forwarding ICE candidate from", socket.id, "to", data.targetID)
+        io.to(data.targetID).emit("ice-candidate", {
+            candidate: data.candidate,
+            sender: socket.id
+        })
+    })
+
+    socket.on("disconnect", () => {
+        console.log("Client disconnected", socket.id)
     })
 })
 
