@@ -128,7 +128,9 @@ function App() {
   };
 
   // Initiate WebRTC connection (caller side)
-  const startCall = async (targetSocketId) => {
+  const startCall = async (targetSocketId, isInitiator = true) => {
+    if (!isInitiator) return; // Only initiator creates offer
+    
     console.log("Starting call to", targetSocketId);
     setConnectionStatus("Connecting...");
 
@@ -298,10 +300,12 @@ function App() {
       setPeerData(data.peerData);
       setConnectionStatus("Peer Found! Connecting...");
       
-      // Automatically start call
-      setTimeout(() => {
-        startCall(data.peerId);
-      }, 500);
+      // Only initiator starts call
+      if (data.isInitiator) {
+        setTimeout(() => {
+          startCall(data.peerId, true);
+        }, 500);
+      }
     });
 
     // Waiting for peer
@@ -319,6 +323,11 @@ function App() {
     socket.on("offer", async (data) => {
       console.log("Received offer from", data.sender);
       setConnectionStatus("Incoming call...");
+      
+      // Close existing connection if any
+      if (peerConnection.current) {
+        peerConnection.current.close();
+      }
 
       // Create peer connection
       peerConnection.current = createPeerConnection();
@@ -356,10 +365,12 @@ function App() {
       console.log("Received answer from", data.sender);
 
       try {
-        await peerConnection.current.setRemoteDescription(
-          new RTCSessionDescription(data.answer)
-        );
-        console.log("Answer processed");
+        if (peerConnection.current && peerConnection.current.signalingState !== "stable") {
+          await peerConnection.current.setRemoteDescription(
+            new RTCSessionDescription(data.answer)
+          );
+          console.log("Answer processed");
+        }
       } catch (error) {
         console.error("Error handling answer:", error);
       }

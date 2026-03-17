@@ -325,6 +325,9 @@ io.on("connection", (socket) => {
 
             console.log(`Matched: ${user1.username} <-> ${user2.username}`);
 
+            // Decide who is initiator (lower socket ID initiates)
+            const isUser1Initiator = socket.id < matchSocketId;
+
             // Send match notification to both users
             socket.emit("peer-matched", {
                 peerId: matchSocketId,
@@ -333,7 +336,8 @@ io.on("connection", (socket) => {
                     name: user2.name,
                     avatar: user2.avatar,
                     interests: user2.interests
-                }
+                },
+                isInitiator: isUser1Initiator
             });
 
             io.to(matchSocketId).emit("peer-matched", {
@@ -343,7 +347,8 @@ io.on("connection", (socket) => {
                     name: user1.name,
                     avatar: user1.avatar,
                     interests: user1.interests
-                }
+                },
+                isInitiator: !isUser1Initiator
             });
 
             // Broadcast updated waiting count
