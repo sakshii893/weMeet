@@ -85,6 +85,8 @@ function App() {
       console.log("Received remote track");
       if (remoteVideo.current) {
         remoteVideo.current.srcObject = event.streams[0];
+        // Force play on mobile
+        remoteVideo.current.play().catch(e => console.log("Play error:", e));
       }
     };
 
@@ -664,6 +666,7 @@ function App() {
           id="remoteVideo"
           ref={remoteVideo}
           autoPlay
+          playsInline
         />
 
         {/* Local video - Picture in picture (bottom right) */}
@@ -672,6 +675,7 @@ function App() {
           ref={localVideo}
           autoPlay
           muted
+          playsInline
         />
 
         {/* Video Controls - Only show when connected */}
