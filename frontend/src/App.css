@@ -11,6 +11,14 @@
   width:100vw;
   height:100vh;
   display:flex;
+  flex-direction:row;
+}
+
+/* Mobile layout */
+@media (max-width: 768px) {
+  .outer {
+    flex-direction:column;
+  }
 }
 
 /* chat panel */
@@ -23,6 +31,15 @@
   flex-direction:column;
 }
 
+/* Mobile chat */
+@media (max-width: 768px) {
+  .chat {
+    width:100%;
+    height:40vh;
+    order:2;
+  }
+}
+
 /* chat header */
 
 .chatHeader{
@@ -30,8 +47,11 @@
   padding:10px;
   display:flex;
   justify-content:space-between;
+  align-items:center;
   border-bottom:1px solid #777;
   color:white;
+  flex-wrap:wrap;
+  gap:10px;
 }
 
 .chatHeader span{
@@ -59,6 +79,7 @@
   align-self:flex-end;
   max-width:70%;
   color:white;
+  word-wrap:break-word;
 }
 
 /* receiver bubble */
@@ -71,6 +92,7 @@
   align-self:flex-start;
   max-width:70%;
   color:white;
+  word-wrap:break-word;
 }
 
 /* input area */
@@ -131,6 +153,15 @@
   align-items:center;
 }
 
+/* Mobile video */
+@media (max-width: 768px) {
+  .video {
+    width:100%;
+    height:60vh;
+    order:1;
+  }
+}
+
 /* remote video - full screen */
 
 #remoteVideo{
@@ -154,12 +185,21 @@
   z-index:10;
 }
 
+/* Mobile local video - smaller */
+@media (max-width: 768px) {
+  #localVideo {
+    width:120px;
+    height:90px;
+    bottom:80px;
+    right:10px;
+  }
+}
+
 /* Spinner animation */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
-
 
 /* Video control buttons hover effects */
 .video button:hover {
@@ -169,4 +209,19 @@
 
 .video button:active {
   transform: scale(0.95);
+}
+
+/* Mobile controls - adjust position */
+@media (max-width: 768px) {
+  .video > div[style*="bottom: 20px"] {
+    bottom: 10px !important;
+    padding: 10px 15px !important;
+    gap: 10px !important;
+  }
+  
+  .video button[style*="width: 50px"] {
+    width: 45px !important;
+    height: 45px !important;
+    font-size: 18px !important;
+  }
 }

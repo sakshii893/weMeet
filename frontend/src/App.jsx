@@ -394,10 +394,20 @@ function App() {
     // Start camera only once
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
+        // Mobile-friendly constraints
+        const constraints = {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "user" // Front camera on mobile
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
         localStream.current = stream;
         
@@ -408,7 +418,24 @@ function App() {
         console.log("Camera started");
       } catch (error) {
         console.error("Camera access denied", error);
-        alert("Camera/microphone access is required for video chat");
+        
+        // Fallback: Try with basic constraints
+        try {
+          const basicStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+          });
+          
+          localStream.current = basicStream;
+          
+          if (localVideo.current) {
+            localVideo.current.srcObject = basicStream;
+          }
+          
+          console.log("Camera started with basic constraints");
+        } catch (fallbackError) {
+          alert("Camera/microphone access is required for video chat");
+        }
       }
     };
 
