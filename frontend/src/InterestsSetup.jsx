@@ -45,7 +45,10 @@ function InterestsSetup({ user, onComplete }) {
           'Content-Type': 'application/json'
         },
         credentials: 'include',
-        body: JSON.stringify({ interests })
+        body: JSON.stringify({ 
+          interests,
+          userId: user.id  // Send user ID in request
+        })
       });
 
       const data = await response.json();

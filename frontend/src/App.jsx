@@ -42,6 +42,7 @@ function App() {
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const dataChannel = useRef(null);
+  const currentTargetId = useRef(""); // Store target ID in ref for ICE candidates
 
   // Send message via Socket.io (fallback) or WebRTC DataChannel
   const sendMessage = () => {
@@ -70,7 +71,7 @@ function App() {
   };
 
   // Initialize WebRTC peer connection
-  const createPeerConnection = () => {
+  const createPeerConnection = (targetSocketId) => {
     const pc = new RTCPeerConnection(rtcConfig);
 
     // Add local stream tracks to peer connection
@@ -93,9 +94,9 @@ function App() {
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log("Sending ICE candidate");
+        console.log("Sending ICE candidate to", targetSocketId);
         socket.emit("ice-candidate", {
-          targetID: targetId,
+          targetID: targetSocketId,
           candidate: event.candidate
         });
       }
@@ -105,6 +106,10 @@ function App() {
     pc.onconnectionstatechange = () => {
       console.log("Connection state:", pc.connectionState);
       setConnectionStatus(pc.connectionState);
+      
+      if (pc.connectionState === "connected") {
+        setConnectionStatus("Connected");
+      }
     };
 
     return pc;
@@ -135,9 +140,12 @@ function App() {
     
     console.log("Starting call to", targetSocketId);
     setConnectionStatus("Connecting...");
+    
+    // Store target ID
+    currentTargetId.current = targetSocketId;
 
-    // Create peer connection
-    peerConnection.current = createPeerConnection();
+    // Create peer connection with target ID
+    peerConnection.current = createPeerConnection(targetSocketId);
 
     // Create DataChannel (caller creates it)
     const channel = peerConnection.current.createDataChannel("chat");
@@ -153,7 +161,7 @@ function App() {
         offer: offer
       });
 
-      console.log("Offer sent");
+      console.log("Offer sent to", targetSocketId);
     } catch (error) {
       console.error("Error creating offer:", error);
       setConnectionStatus("Error");
@@ -185,10 +193,18 @@ function App() {
 
   // Next peer (disconnect and find new)
   const nextPeer = () => {
+    // Notify backend about call end
+    socket.emit("end-call");
+    
     // Close current connection
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
+    }
+    
+    // Clear remote video
+    if (remoteVideo.current) {
+      remoteVideo.current.srcObject = null;
     }
     
     setTargetId("");
@@ -202,10 +218,18 @@ function App() {
 
   // End call completely
   const endCall = () => {
+    // Notify backend about call end
+    socket.emit("end-call");
+    
     // Close current connection
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
+    }
+    
+    // Clear remote video
+    if (remoteVideo.current) {
+      remoteVideo.current.srcObject = null;
     }
     
     setTargetId("");
@@ -256,10 +280,18 @@ function App() {
     const checkAuth = async () => {
       try {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000';
+        console.log('Checking auth with backend:', backendUrl);
+        
         const response = await fetch(`${backendUrl}/api/user`, {
-          credentials: 'include'
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
         });
         const data = await response.json();
+        
+        console.log('Auth check response:', data);
         
         if (data.authenticated) {
           setUser(data.user);
@@ -271,7 +303,12 @@ function App() {
       }
     };
 
-    checkAuth();
+    // Longer delay to ensure cookies are set
+    const timer = setTimeout(() => {
+      checkAuth();
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -316,6 +353,31 @@ function App() {
       setConnectionStatus("Waiting for peer...");
     });
 
+    // Peer disconnected
+    socket.on("peer-disconnected", () => {
+      console.log("Peer disconnected");
+      
+      // Close connection
+      if (peerConnection.current) {
+        peerConnection.current.close();
+        peerConnection.current = null;
+      }
+      
+      // Clear remote video
+      if (remoteVideo.current) {
+        remoteVideo.current.srcObject = null;
+      }
+      
+      // Reset state
+      setTargetId("");
+      setPeerData(null);
+      setConnectionStatus("Peer disconnected");
+      setSearching(false);
+      
+      // Show notification
+      alert("Peer disconnected from the call");
+    });
+
     // Receive message from Socket.io (fallback)
     socket.on("receiver", (receiverData) => {
       setAllMessage((prev) => [...prev, receiverData]);
@@ -326,13 +388,16 @@ function App() {
       console.log("Received offer from", data.sender);
       setConnectionStatus("Incoming call...");
       
+      // Store target ID
+      currentTargetId.current = data.sender;
+      
       // Close existing connection if any
       if (peerConnection.current) {
         peerConnection.current.close();
       }
 
-      // Create peer connection
-      peerConnection.current = createPeerConnection();
+      // Create peer connection with sender ID
+      peerConnection.current = createPeerConnection(data.sender);
 
       // Handle DataChannel created by caller
       peerConnection.current.ondatachannel = (event) => {
@@ -355,7 +420,7 @@ function App() {
           answer: answer
         });
 
-        console.log("Answer sent");
+        console.log("Answer sent to", data.sender);
       } catch (error) {
         console.error("Error handling offer:", error);
         setConnectionStatus("Error");
@@ -383,10 +448,13 @@ function App() {
       console.log("Received ICE candidate from", data.sender);
 
       try {
-        if (peerConnection.current) {
+        if (peerConnection.current && peerConnection.current.remoteDescription) {
           await peerConnection.current.addIceCandidate(
             new RTCIceCandidate(data.candidate)
           );
+          console.log("ICE candidate added successfully");
+        } else {
+          console.log("Waiting for remote description before adding ICE candidate");
         }
       } catch (error) {
         console.error("Error adding ICE candidate:", error);
@@ -452,6 +520,7 @@ function App() {
       socket.off("ice-candidate");
       socket.off("peer-matched");
       socket.off("waiting-for-peer");
+      socket.off("peer-disconnected");
       socket.off("online-count");
 
       if (localStream.current) {
@@ -483,7 +552,7 @@ function App() {
 
   // Show login if not authenticated
   if (!user) {
-    return <Login />;
+    return <Login onLoginSuccess={(userData) => setUser(userData)} />;
   }
 
   // Show interests setup if profile not completed
@@ -548,7 +617,7 @@ function App() {
             />
             <div style={{ flex: 1 }}>
               <div style={{ color: '#00ff9d', fontWeight: 'bold' }}>
-                {peerData.name}
+                {peerData.username}
               </div>
               <div style={{ fontSize: '11px', color: '#aaa' }}>
                 {peerData.interests.slice(0, 3).join(', ')}

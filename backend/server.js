@@ -6,6 +6,7 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('./models/User');
 require('dotenv').config();
 
@@ -26,6 +27,7 @@ app.use(cors({
         "https://we-meet-chi.vercel.app",  // Old production frontend
         "http://localhost:5173",
         "http://localhost:5174",
+        `http://${process.env.LOCAL_IP || '192.168.10.187'}:5173`,  // Mobile access
         /^http:\/\/192\.168\.\d+\.\d+:5173$/,  // Allow any local network IP
         /^http:\/\/10\.\d+\.\d+\.\d+:5173$/     // Allow 10.x.x.x network
     ],
@@ -37,11 +39,13 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
+    name: 'sessionId',  // Custom cookie name
     cookie: {
-        secure: process.env.NODE_ENV === 'production',  // Secure cookies in production
+        secure: false,  // Allow HTTP for local testing
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'  // Cross-site cookies for production
+        sameSite: 'lax',  // Allow cross-origin on same network
+        path: '/'
     }
 }));
 
@@ -53,6 +57,7 @@ const io = new Server(httpServer, {
             "https://we-meet-chi.vercel.app",  // Old production frontend
             "http://localhost:5173",
             "http://localhost:5174",
+            `http://${process.env.LOCAL_IP || '192.168.10.187'}:5173`,  // Mobile access
             /^http:\/\/192\.168\.\d+\.\d+:5173$/,
             /^http:\/\/10\.\d+\.\d+\.\d+:5173$/
         ],
@@ -66,6 +71,7 @@ const io = new Server(httpServer, {
 // In-memory store for fast retrieval
 const onlineUsers = new Map(); // socketId -> user data
 const waitingQueue = new Set(); // socketIds waiting for match
+const activePairs = new Map(); // socketId -> connected peer socketId
 
 // Helper function to calculate interest match score
 function calculateMatchScore(user1Interests, user2Interests) {
@@ -117,25 +123,162 @@ app.get("/health", (req, res) => {
     })
 })
 
+// Simple Registration
+app.post("/auth/register", async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        console.log('Registration attempt:', username);
+
+        // Validation
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        // Check if user exists
+        const existingUser = await User.findOne({ username });
+
+        if (existingUser) {
+            console.log('Username already taken:', username);
+            return res.status(400).json({ error: 'Username already taken' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create user
+        const user = new User({
+            username,
+            password: hashedPassword,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+            interests: [],
+            profileCompleted: false
+        });
+
+        await user.save();
+        
+        console.log('User registered:', username);
+
+        // Set session
+        req.session.user = {
+            id: user._id,
+            username: user.username,
+            avatar: user.avatar
+        };
+        
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Session error' });
+            }
+            
+            console.log('Session saved for:', username, 'Session ID:', req.sessionID);
+            
+            res.json({
+                success: true,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    avatar: user.avatar,
+                    interests: user.interests,
+                    profileCompleted: user.profileCompleted
+                }
+            });
+        });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
+
+// Simple Login
+app.post("/auth/login", async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        console.log('Login attempt:', username);
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        // Find user
+        const user = await User.findOne({ username });
+
+        if (!user || !user.password) {
+            console.log('User not found:', username);
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+
+        // Check password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+
+        if (!isValidPassword) {
+            console.log('Invalid password for:', username);
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+
+        // Update last login
+        user.lastLogin = new Date();
+        await user.save();
+
+        // Set session
+        req.session.user = {
+            id: user._id,
+            username: user.username,
+            avatar: user.avatar
+        };
+
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Session error' });
+            }
+            
+            console.log('Session saved for:', username, 'Session ID:', req.sessionID);
+            
+            res.json({
+                success: true,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    avatar: user.avatar,
+                    interests: user.interests,
+                    profileCompleted: user.profileCompleted
+                }
+            });
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
 app.get("/api/user", async (req, res) => {
+    console.log('Auth check - Session ID:', req.sessionID, 'User:', req.session.user?.username);
+    
     if (req.session.user) {
         try {
-            const user = await User.findOne({ githubId: req.session.user.id });
+            const user = await User.findById(req.session.user.id);
             
             if (user) {
+                console.log('User found:', user.username);
                 res.json({
                     authenticated: true,
                     user: {
-                        id: user.githubId,
+                        id: user._id,
                         username: user.username,
-                        name: user.name,
                         avatar: user.avatar,
-                        email: user.email,
                         interests: user.interests,
                         profileCompleted: user.profileCompleted
                     }
                 });
             } else {
+                console.log('User not found in DB');
                 res.json({
                     authenticated: false,
                     user: null
@@ -146,6 +289,7 @@ app.get("/api/user", async (req, res) => {
             res.status(500).json({ error: 'Failed to fetch user data' });
         }
     } else {
+        console.log('No session user');
         res.json({
             authenticated: false,
             user: null
@@ -153,7 +297,8 @@ app.get("/api/user", async (req, res) => {
     }
 });
 
-app.get("/auth/github", (req, res) => {
+// GitHub OAuth (commented out for now)
+/*
     const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=user:email`;
     res.redirect(githubAuthUrl);
 });
@@ -239,18 +384,28 @@ app.post("/auth/logout", (req, res) => {
         res.json({ success: true, message: 'Logged out successfully' });
     });
 });
+*/
+
+app.post("/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ success: true, message: 'Logged out successfully' });
+    });
+});
 
 // ============ USER PROFILE ROUTES ============
 
 app.post("/api/user/interests", async (req, res) => {
-    if (!req.session.user) {
-        return res.status(401).json({ error: 'Not authenticated' });
-    }
-
     try {
-        const { interests } = req.body;
+        const { interests, userId } = req.body;
+        
+        console.log('Updating interests for user:', userId);
 
-        const user = await User.findOne({ githubId: req.session.user.id });
+        // Find user by ID from request body (not session)
+        const user = await User.findById(userId);
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -259,15 +414,15 @@ app.post("/api/user/interests", async (req, res) => {
         user.interests = interests;
         user.profileCompleted = true;
         await user.save();
+        
+        console.log('Interests updated for:', user.username);
 
         res.json({
             success: true,
             user: {
-                id: user.githubId,
+                id: user._id,
                 username: user.username,
-                name: user.name,
                 avatar: user.avatar,
-                email: user.email,
                 interests: user.interests,
                 profileCompleted: user.profileCompleted
             }
@@ -298,9 +453,8 @@ io.on("connection", (socket) => {
         // Store user in online users map
         onlineUsers.set(socket.id, {
             socketId: socket.id,
-            githubId: userData.id,
+            userId: userData.id,
             username: userData.username,
-            name: userData.name,
             avatar: userData.avatar,
             interests: userData.interests || []
         });
@@ -316,6 +470,13 @@ io.on("connection", (socket) => {
     socket.on("find-peer", () => {
         console.log("Finding peer for:", socket.id);
 
+        // Check if user is online
+        if (!onlineUsers.has(socket.id)) {
+            console.log("User not found in online users:", socket.id);
+            socket.emit("error", { message: "Please refresh and try again" });
+            return;
+        }
+
         // Add to waiting queue
         waitingQueue.add(socket.id);
 
@@ -323,12 +484,24 @@ io.on("connection", (socket) => {
         const matchSocketId = findBestMatch(socket.id);
 
         if (matchSocketId) {
+            // Verify both users still exist
+            const user1 = onlineUsers.get(socket.id);
+            const user2 = onlineUsers.get(matchSocketId);
+
+            if (!user1 || !user2) {
+                console.log("One or both users not found, retrying...");
+                waitingQueue.delete(matchSocketId);
+                socket.emit("waiting-for-peer");
+                return;
+            }
+
             // Remove both from waiting queue
             waitingQueue.delete(socket.id);
             waitingQueue.delete(matchSocketId);
 
-            const user1 = onlineUsers.get(socket.id);
-            const user2 = onlineUsers.get(matchSocketId);
+            // Store active pair
+            activePairs.set(socket.id, matchSocketId);
+            activePairs.set(matchSocketId, socket.id);
 
             console.log(`Matched: ${user1.username} <-> ${user2.username}`);
 
@@ -340,7 +513,6 @@ io.on("connection", (socket) => {
                 peerId: matchSocketId,
                 peerData: {
                     username: user2.username,
-                    name: user2.name,
                     avatar: user2.avatar,
                     interests: user2.interests
                 },
@@ -351,7 +523,6 @@ io.on("connection", (socket) => {
                 peerId: socket.id,
                 peerData: {
                     username: user1.username,
-                    name: user1.name,
                     avatar: user1.avatar,
                     interests: user1.interests
                 },
@@ -382,6 +553,22 @@ io.on("connection", (socket) => {
             count: onlineUsers.size,
             waiting: waitingQueue.size
         });
+    });
+
+    // User ends call or skips to next
+    socket.on("end-call", () => {
+        const peerId = activePairs.get(socket.id);
+        
+        if (peerId) {
+            // Notify peer that call ended
+            io.to(peerId).emit("peer-disconnected");
+            
+            // Remove pair
+            activePairs.delete(socket.id);
+            activePairs.delete(peerId);
+            
+            console.log("Call ended between", socket.id, "and", peerId);
+        }
     });
 
     // Handle text chat messages
@@ -424,6 +611,15 @@ io.on("connection", (socket) => {
     // User disconnects
     socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
+        
+        // Notify peer if in active call
+        const peerId = activePairs.get(socket.id);
+        if (peerId) {
+            io.to(peerId).emit("peer-disconnected");
+            activePairs.delete(peerId);
+            activePairs.delete(socket.id);
+            console.log("Notified peer", peerId, "about disconnect");
+        }
         
         // Remove from online users and waiting queue
         onlineUsers.delete(socket.id);

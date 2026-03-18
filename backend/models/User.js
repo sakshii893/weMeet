@@ -1,24 +1,20 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  githubId: {
+  username: {
     type: String,
     required: true,
     unique: true
   },
-  username: {
+  password: {
     type: String,
     required: true
-  },
-  name: {
-    type: String,
-    required: true
-  },
-  email: {
-    type: String
   },
   avatar: {
-    type: String
+    type: String,
+    default: function() {
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}`;
+    }
   },
   interests: [{
     type: String,
