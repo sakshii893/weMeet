@@ -22,7 +22,8 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use(cors({
     origin: [
         process.env.FRONTEND_URL || "http://localhost:5173",
-        "https://we-meet-chi.vercel.app",  // Production frontend
+        "https://devmeet-wine.vercel.app",  // New production frontend
+        "https://we-meet-chi.vercel.app",  // Old production frontend
         "http://localhost:5173",
         "http://localhost:5174",
         /^http:\/\/192\.168\.\d+\.\d+:5173$/,  // Allow any local network IP
@@ -48,7 +49,8 @@ const io = new Server(httpServer, {
     cors: {
         origin: [
             process.env.FRONTEND_URL || "http://localhost:5173",
-            "https://we-meet-chi.vercel.app",  // Production frontend
+            "https://devmeet-wine.vercel.app",  // New production frontend
+            "https://we-meet-chi.vercel.app",  // Old production frontend
             "http://localhost:5173",
             "http://localhost:5174",
             /^http:\/\/192\.168\.\d+\.\d+:5173$/,
