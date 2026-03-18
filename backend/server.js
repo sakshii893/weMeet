@@ -22,6 +22,8 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use(cors({
     origin: [
         process.env.FRONTEND_URL || "http://localhost:5173",
+        "https://we-meet-chi.vercel.app",  // Production frontend
+        "http://localhost:5173",
         "http://localhost:5174",
         /^http:\/\/192\.168\.\d+\.\d+:5173$/,  // Allow any local network IP
         /^http:\/\/10\.\d+\.\d+\.\d+:5173$/     // Allow 10.x.x.x network
@@ -35,9 +37,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',  // Secure cookies in production
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'  // Cross-site cookies for production
     }
 }));
 
@@ -45,6 +48,8 @@ const io = new Server(httpServer, {
     cors: {
         origin: [
             process.env.FRONTEND_URL || "http://localhost:5173",
+            "https://we-meet-chi.vercel.app",  // Production frontend
+            "http://localhost:5173",
             "http://localhost:5174",
             /^http:\/\/192\.168\.\d+\.\d+:5173$/,
             /^http:\/\/10\.\d+\.\d+\.\d+:5173$/
